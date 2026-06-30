@@ -1,0 +1,25 @@
+{
+  "name": "@luna-ai/desktop",
+  "version": "0.0.1",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "electron-vite dev",
+    "build": "electron-vite build",
+    "preview": "electron-vite preview",
+    "lint": "eslint .",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@luna-ai/ui": "workspace:*",
+    "@luna-ai/shared": "workspace:*",
+    "@luna-ai/editor": "workspace:*"
+  },
+  "devDependencies": {
+    "@types/node": "^22.16.5",
+    "electron": "^33.2.1",
+    "electron-vite": "^2.3.0",
+    "typescript": "^5.8.3",
+    "vite": "^5.0.0"
+  }
+}

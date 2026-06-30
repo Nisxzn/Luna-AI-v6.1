@@ -1,0 +1,26 @@
+{
+  "name": "@luna-ai/backend",
+  "version": "0.0.1",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "tsx watch src/index.ts",
+    "build": "tsc",
+    "start": "node dist/index.js",
+    "lint": "eslint .",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@luna-ai/shared": "workspace:*",
+    "@luna-ai/types": "workspace:*",
+    "express": "^4.21.2",
+    "cors": "^2.8.5"
+  },
+  "devDependencies": {
+    "@types/express": "^5.0.0",
+    "@types/cors": "^2.8.17",
+    "@types/node": "^22.16.5",
+    "tsx": "^4.19.2",
+    "typescript": "^5.8.3"
+  }
+}
