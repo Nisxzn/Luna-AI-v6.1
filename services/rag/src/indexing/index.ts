@@ -1,0 +1,1 @@
+export { IndexManager } from './IndexManager';

@@ -7,10 +7,15 @@
     "baseUrl": ".",
     "paths": {
       "@/*": ["./src/*"]
-    }
+    },
+    "jsx": "react-jsx",
+    "lib": ["DOM", "DOM.Iterable", "ESNext"],
+    "types": ["node"]
   },
   "include": ["src/**/*"],
   "references": [
+    { "path": "../../packages/ai" },
+    { "path": "../../packages/types" },
     { "path": "../../packages/ui" },
     { "path": "../../packages/shared" },
     { "path": "../../packages/editor" }
