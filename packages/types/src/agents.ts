@@ -1,4 +1,5 @@
 // Multi-Agent System Types
+import type { TaskPriority, Task, TaskPlan } from './tasks';
 
 export type AgentCategory = 'development' | 'workspace' | 'ai' | 'planning';
 
@@ -16,9 +17,10 @@ export enum AgentState {
   Cancelled = 'cancelled',
 }
 
-export type TaskPriority = 'low' | 'medium' | 'high' | 'critical';
-
 export type TaskStatus = 'pending' | 'in_progress' | 'completed' | 'failed' | 'cancelled';
+
+// Re-export task types for backward compatibility
+export type { TaskPriority, Task, TaskPlan } from './tasks';
 
 export interface AgentCapability {
   name: string;
@@ -76,33 +78,6 @@ export interface AgentExecutionResult {
   output: AgentOutput;
   executionTime: number;
   timestamp: Date;
-}
-
-export interface Task {
-  id: string;
-  type: string;
-  description: string;
-  priority: TaskPriority;
-  status: TaskStatus;
-  input: AgentInput;
-  context: AgentContext;
-  assignedAgentId?: string;
-  createdAt: Date;
-  updatedAt: Date;
-  startedAt?: Date;
-  completedAt?: Date;
-  retryCount: number;
-  maxRetries: number;
-  timeout: number;
-  dependencies?: string[];
-  parentTaskId?: string;
-}
-
-export interface TaskPlan {
-  tasks: Task[];
-  executionOrder: string[];
-  estimatedDuration: number;
-  requiredAgents: string[];
 }
 
 export interface AgentEvent {
@@ -296,4 +271,278 @@ export interface AgentConfiguration {
   set(key: string, value: unknown): void;
   getAll(): Record<string, unknown>;
   validate(): boolean;
+}
+
+// =============================================================================
+// Phase 6.4 — Agent Communication System
+// =============================================================================
+
+// ---------------------------------------------------------------------------
+// Typed event discriminated union
+// ---------------------------------------------------------------------------
+
+/** All event type literals used by the communication system. */
+export type AgentEventType =
+  // Lifecycle
+  | 'agent_started'
+  | 'agent_completed'
+  | 'agent_failed'
+  | 'agent_cancelled'
+  // Tasks
+  | 'task_created'
+  | 'task_completed'
+  | 'task_failed'
+  // Messaging
+  | 'message'
+  // Request/Response
+  | 'request'
+  | 'response'
+  // System
+  | 'error'
+  | 'heartbeat';
+
+/** Base shape every typed event must satisfy. */
+export interface TypedAgentEvent<
+  T extends AgentEventType = AgentEventType,
+  D = unknown,
+> {
+  /** Unique event identifier. */
+  id: string;
+  /** Discriminant — narrows the data payload type. */
+  type: T;
+  sourceAgentId?: string;
+  targetAgentId?: string;
+  taskId?: string;
+  timestamp: Date;
+  /** Correlation id — links a response back to its originating request. */
+  correlationId?: string;
+  /** Whether the event has been cancelled. */
+  cancelled?: boolean;
+  data: D;
+}
+
+// Concrete typed event variants
+
+export interface AgentLifecycleEvent
+  extends TypedAgentEvent<
+    'agent_started' | 'agent_completed' | 'agent_failed' | 'agent_cancelled',
+    { agentId: string; reason?: string }
+  > {}
+
+export interface AgentTaskEvent
+  extends TypedAgentEvent<
+    'task_created' | 'task_completed' | 'task_failed',
+    { taskId: string; taskType?: string; error?: string }
+  > {}
+
+export interface AgentMessageEvent
+  extends TypedAgentEvent<
+    'message',
+    AgentMessage
+  > {}
+
+export interface AgentRequestEvent
+  extends TypedAgentEvent<
+    'request',
+    {
+      requestId: string;
+      payload: unknown;
+      timeoutMs: number;
+    }
+  > {}
+
+export interface AgentResponseEvent
+  extends TypedAgentEvent<
+    'response',
+    {
+      requestId: string;
+      payload: unknown;
+      success: boolean;
+      error?: string;
+    }
+  > {}
+
+export interface AgentErrorEvent
+  extends TypedAgentEvent<
+    'error',
+    { message: string; stack?: string; context?: Record<string, unknown> }
+  > {}
+
+export interface AgentHeartbeatEvent
+  extends TypedAgentEvent<
+    'heartbeat',
+    { agentId: string; status: AgentStatus; timestamp: Date }
+  > {}
+
+// ---------------------------------------------------------------------------
+// Request / Response
+// ---------------------------------------------------------------------------
+
+/** A pending request waiting for a correlated response. */
+export interface AgentRequest {
+  /** Unique request identifier — becomes the correlationId on the response. */
+  requestId: string;
+  fromAgentId: string;
+  toAgentId: string;
+  payload: unknown;
+  /** Absolute deadline (ms since epoch). */
+  deadlineMs: number;
+  /** AbortSignal passed in by the caller for cancellation. */
+  signal?: AbortSignal;
+  timestamp: Date;
+}
+
+/** The resolved value returned to the caller of `request()`. */
+export interface AgentResponse {
+  requestId: string;
+  fromAgentId: string;
+  toAgentId: string;
+  payload: unknown;
+  success: boolean;
+  error?: string;
+  latencyMs: number;
+  timestamp: Date;
+}
+
+// ---------------------------------------------------------------------------
+// Channel
+// ---------------------------------------------------------------------------
+
+/** A logical per-agent inbox/outbox for targeted, queued communication. */
+export interface AgentChannelEntry {
+  message: AgentMessage;
+  receivedAt: Date;
+  read: boolean;
+}
+
+export interface IAgentChannel {
+  readonly agentId: string;
+  /** Deliver a message into this channel's inbox. */
+  deliver(message: AgentMessage): void;
+  /** Read the next unread message, or null if the inbox is empty. */
+  receive(): AgentMessage | null;
+  /** Drain all unread messages. */
+  drain(): AgentMessage[];
+  /** Register a callback invoked whenever a new message arrives. */
+  onReceive(handler: (message: AgentMessage) => void): void;
+  /** Remove a previously registered receive handler. */
+  offReceive(handler: (message: AgentMessage) => void): void;
+  /** Number of unread messages in the inbox. */
+  pendingCount(): number;
+  /** Clear the inbox. */
+  clear(): void;
+}
+
+// ---------------------------------------------------------------------------
+// Communication Log
+// ---------------------------------------------------------------------------
+
+export type CommunicationLogLevel = 'info' | 'warn' | 'error' | 'debug';
+
+export interface CommunicationLogEntry {
+  id: string;
+  timestamp: Date;
+  level: CommunicationLogLevel;
+  eventType: AgentEventType;
+  sourceAgentId?: string;
+  targetAgentId?: string;
+  correlationId?: string;
+  message: string;
+  data?: unknown;
+  error?: string;
+}
+
+// ---------------------------------------------------------------------------
+// Communication Bus interface
+// ---------------------------------------------------------------------------
+
+export interface IAgentCommunicationBus {
+  // ---- Typed pub/sub -------------------------------------------------------
+  /** Publish a typed event to all subscribers of its type. */
+  publish<T extends AgentEventType, D>(
+    event: TypedAgentEvent<T, D>,
+  ): Promise<void>;
+
+  /** Subscribe to events of a specific type. */
+  subscribe<T extends AgentEventType, D>(
+    eventType: T,
+    handler: (event: TypedAgentEvent<T, D>) => void | Promise<void>,
+  ): void;
+
+  /** Unsubscribe a handler. */
+  unsubscribe<T extends AgentEventType, D>(
+    eventType: T,
+    handler: (event: TypedAgentEvent<T, D>) => void | Promise<void>,
+  ): void;
+
+  /** Subscribe to ALL event types (wildcard). */
+  subscribeAll(
+    handler: (event: TypedAgentEvent) => void | Promise<void>,
+  ): void;
+
+  /** Remove a wildcard subscriber. */
+  unsubscribeAll(
+    handler: (event: TypedAgentEvent) => void | Promise<void>,
+  ): void;
+
+  // ---- Direct messaging ---------------------------------------------------
+  /** Send a message directly to a target agent's channel. */
+  sendMessage(message: AgentMessage): Promise<void>;
+
+  /** Register a global message listener (receives all messages). */
+  onMessage(handler: (message: AgentMessage) => void): void;
+
+  /** Remove a global message listener. */
+  offMessage(handler: (message: AgentMessage) => void): void;
+
+  // ---- Request / Response -------------------------------------------------
+  /**
+   * Send a request to a target agent and await a correlated response.
+   * Rejects on timeout or if the provided AbortSignal fires.
+   */
+  request(
+    fromAgentId: string,
+    toAgentId: string,
+    payload: unknown,
+    timeoutMs?: number,
+    signal?: AbortSignal,
+  ): Promise<AgentResponse>;
+
+  /**
+   * Reply to an inbound request identified by its requestId.
+   * The reply is routed back to the original caller via correlationId.
+   */
+  reply(
+    fromAgentId: string,
+    requestId: string,
+    payload: unknown,
+    success?: boolean,
+    error?: string,
+  ): Promise<void>;
+
+  // ---- Channel management -------------------------------------------------
+  /** Get (or lazily create) the channel for an agent. */
+  getChannel(agentId: string): IAgentChannel;
+
+  // ---- History & introspection -------------------------------------------
+  /** Full event history, newest-last. */
+  getEventHistory(): TypedAgentEvent[];
+
+  /** Events filtered by type. */
+  getEventsByType<T extends AgentEventType>(type: T): TypedAgentEvent<T>[];
+
+  /** Events involving a specific agent (source or target). */
+  getEventsByAgent(agentId: string): TypedAgentEvent[];
+
+  /** Events in a time window. */
+  getEventsByTimeRange(from: Date, to: Date): TypedAgentEvent[];
+
+  /** Communication log entries. */
+  getLog(): CommunicationLogEntry[];
+
+  /** Clear event history (does not affect subscriptions). */
+  clearHistory(): void;
+
+  // ---- Lifecycle ----------------------------------------------------------
+  dispose(): void;
 }

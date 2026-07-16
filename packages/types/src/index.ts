@@ -4,3 +4,5 @@
 export * from './memory';
 export * from './rag';
 export * from './agents';
+export * from './tasks';
+export * from './context';

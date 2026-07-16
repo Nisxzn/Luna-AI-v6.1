@@ -10,6 +10,7 @@
     }
   },
   "include": ["src/**/*"],
+  "exclude": ["src/agents_old/**/*"],
   "references": [
     { "path": "../../packages/types" },
     { "path": "../../packages/shared" },
