@@ -17,14 +17,14 @@ export class AgentRouter implements IAgentRouter {
   }
 
   async route(task: Task): Promise<string> {
-    const agentId = await this.getBestAgent(task.type, task.context);
+    const agentId = await this.getBestAgent(task.type);
     if (!agentId) {
       throw new Error(`No agent available for task type: ${task.type}`);
     }
     return agentId;
   }
 
-  async getBestAgent(taskType: string, context: AgentContext): Promise<string | null> {
+  async getBestAgent(taskType: string): Promise<string | null> {
     const agents = await this.registry.list();
 
     // Filter agents that can handle the task type
